@@ -1,108 +1,172 @@
+import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Spotify Data Analysis", layout="wide")
 
 # ---------------- LOAD DATA ----------------
-df = pd.read_csv("Dataset.csv", encoding="ISO-8859-1")
+@st.cache_data
+def load_data():
+    df = pd.read_csv("Dataset.csv", encoding="ISO-8859-1")
 
-# Clean column names
-df.columns = df.columns.str.replace(".", "_").str.lower()
+    # Clean column names
+    df.columns = df.columns.str.replace(".", "_").str.lower()
 
-# Rename for easy use (if needed)
-df = df.rename(columns={
-    "track_name": "track",
-    "artist_name": "artist",
-    "beats_per_minute": "bpm",
-    "length_": "length"
-})
+    # Rename important columns for easy use
+    df = df.rename(columns={
+        "track_name": "track",
+        "artist_name": "artist",
+        "beats_per_minute": "bpm",
+        "length_": "length",
+        "loudness__db_": "loudness"
+    })
 
-# Set plot style
-sns.set(style="whitegrid")
-
-# ---------------- 1. Popularity Distribution ----------------
-plt.figure()
-sns.histplot(df["popularity"], bins=15, kde=True)
-plt.title("Popularity Distribution")
-plt.xlabel("Popularity")
-plt.ylabel("Count")
-plt.show()
+    return df
 
 
-# ---------------- 2. Top 10 Artists ----------------
-plt.figure()
-df["artist"].value_counts().head(10).plot(kind="bar")
-plt.title("Top 10 Artists with Most Songs")
-plt.xlabel("Artist")
-plt.ylabel("Number of Songs")
-plt.xticks(rotation=45)
-plt.show()
+df = load_data()
 
+# ---------------- TITLE ----------------
+st.title("🎵 Spotify Top Songs — Data Analysis Dashboard")
+st.markdown("**Covers all 10 analytical questions from the assignment.**")
 
-# ---------------- 3. Genre Dominance ----------------
-plt.figure()
-sns.countplot(y="genre", data=df, order=df["genre"].value_counts().index)
-plt.title("Genre Dominance")
-plt.xlabel("Count")
-plt.ylabel("Genre")
-plt.show()
+# ---------------- SIDEBAR FILTER ----------------
+st.sidebar.header("Filter Data")
 
+genres = df["genre"].dropna().unique()
 
-# ---------------- 4. Danceability vs Energy ----------------
-plt.figure()
-sns.scatterplot(x="danceability", y="energy", data=df, hue="genre")
-plt.title("Danceability vs Energy")
-plt.show()
+selected_genres = st.sidebar.multiselect(
+    "Select Genre",
+    options=genres,
+    default=genres
+)
 
+filtered_df = df[df["genre"].isin(selected_genres)]
 
-# ---------------- 5. Acousticness Over Time ----------------
-# Only if year column exists
-if "year" in df.columns:
-    plt.figure()
-    sns.lineplot(x="year", y="acousticness", data=df)
-    plt.title("Acousticness Over Time")
-    plt.show()
+st.write(f"### Total Songs Displayed: {filtered_df.shape[0]}")
+
+# ============================================================
+# 1️⃣ Popularity Distribution
+# ============================================================
+st.subheader("1️⃣ Popularity Distribution")
+
+fig1 = px.histogram(filtered_df, x="popularity", nbins=15)
+st.plotly_chart(fig1, use_container_width=True)
+
+# ============================================================
+# 2️⃣ Top 10 Artists
+# ============================================================
+st.subheader("2️⃣ Top 10 Artists with Most Songs")
+
+top_artists = (
+    filtered_df["artist"]
+    .value_counts()
+    .reset_index()
+    .head(10)
+)
+top_artists.columns = ["Artist", "Number of Songs"]
+
+fig2 = px.bar(top_artists, x="Artist", y="Number of Songs", color="Artist")
+st.plotly_chart(fig2, use_container_width=True)
+
+# ============================================================
+# 3️⃣ Genre Dominance
+# ============================================================
+st.subheader("3️⃣ Genre Dominance")
+
+genre_counts = filtered_df["genre"].value_counts().reset_index()
+genre_counts.columns = ["Genre", "Count"]
+
+fig3 = px.bar(genre_counts, x="Genre", y="Count", color="Genre")
+st.plotly_chart(fig3, use_container_width=True)
+
+# ============================================================
+# 4️⃣ Danceability vs Energy
+# ============================================================
+st.subheader("4️⃣ Danceability vs Energy")
+
+fig4 = px.scatter(
+    filtered_df,
+    x="danceability",
+    y="energy",
+    color="genre",
+    hover_name="track"
+)
+st.plotly_chart(fig4, use_container_width=True)
+
+# ============================================================
+# 5️⃣ Acousticness Over Time (if year exists)
+# ============================================================
+st.subheader("5️⃣ Acousticness Over Time")
+
+if "year" in filtered_df.columns:
+    fig5 = px.line(filtered_df, x="year", y="acousticness")
+    st.plotly_chart(fig5, use_container_width=True)
 else:
-    print("No 'year' column available → Skipping Acousticness Over Time plot.")
+    st.info("Year column not available in dataset.")
 
+# ============================================================
+# 6️⃣ Tempo (BPM) Distribution
+# ============================================================
+st.subheader("6️⃣ Tempo (BPM) Distribution")
 
-# ---------------- 6. Tempo Analysis (BPM Distribution) ----------------
-plt.figure()
-sns.histplot(df["bpm"], bins=15)
-plt.title("Tempo (BPM) Distribution")
-plt.xlabel("BPM")
-plt.ylabel("Count")
-plt.show()
+fig6 = px.histogram(filtered_df, x="bpm", nbins=15)
+st.plotly_chart(fig6, use_container_width=True)
 
+# ============================================================
+# 7️⃣ Loudness vs Popularity
+# ============================================================
+st.subheader("7️⃣ Loudness vs Popularity")
 
-# ---------------- 7. Loudness vs Popularity ----------------
-plt.figure()
-sns.regplot(x="loudness", y="popularity", data=df)
-plt.title("Loudness vs Popularity")
-plt.show()
+fig7 = px.scatter(
+    filtered_df,
+    x="loudness",
+    y="popularity",
+    color="genre",
+    trendline="ols"
+)
+st.plotly_chart(fig7, use_container_width=True)
 
+# ============================================================
+# 8️⃣ Valence vs Danceability
+# ============================================================
+st.subheader("8️⃣ Valence vs Danceability")
 
-# ---------------- 8. Valence vs Danceability ----------------
-plt.figure()
-sns.scatterplot(x="valence", y="danceability", data=df, hue="genre")
-plt.title("Valence vs Danceability")
-plt.show()
+fig8 = px.scatter(
+    filtered_df,
+    x="valence",
+    y="danceability",
+    color="genre",
+    hover_name="track"
+)
+st.plotly_chart(fig8, use_container_width=True)
 
+# ============================================================
+# 9️⃣ Speechiness in Top Genres
+# ============================================================
+st.subheader("9️⃣ Speechiness in Top Genres")
 
-# ---------------- 9. Speechiness in Top Genres ----------------
-top_genres = df["genre"].value_counts().head(3).index
-plt.figure()
-sns.boxplot(x="genre", y="speechiness", data=df[df["genre"].isin(top_genres)])
-plt.title("Speechiness in Top Genres")
-plt.xticks(rotation=45)
-plt.show()
+top3_genres = filtered_df["genre"].value_counts().head(3).index
+speech_df = filtered_df[filtered_df["genre"].isin(top3_genres)]
 
+fig9 = px.box(speech_df, x="genre", y="speechiness", color="genre")
+st.plotly_chart(fig9, use_container_width=True)
 
-# ---------------- 10. Song Duration Trends ----------------
-plt.figure()
-sns.histplot(df["length"], bins=15)
-plt.title("Song Duration Distribution")
-plt.xlabel("Length (seconds)")
-plt.ylabel("Count")
-plt.show()
+# ============================================================
+# 🔟 Song Duration Trends
+# ============================================================
+st.subheader("🔟 Song Duration Distribution & Average")
 
-print("Average song duration:", df["length"].mean())
+fig10 = px.histogram(filtered_df, x="length", nbins=15)
+st.plotly_chart(fig10, use_container_width=True)
+
+st.metric("Average Song Duration (seconds)", round(filtered_df["length"].mean(), 2))
+
+# ---------------- DATA PREVIEW ----------------
+st.subheader("📊 Dataset Preview")
+st.dataframe(filtered_df, use_container_width=True)
+
+# ---------------- FOOTER ----------------
+st.markdown("---")
+st.caption("Streamlit Dashboard • Data Visualization Assignment")
